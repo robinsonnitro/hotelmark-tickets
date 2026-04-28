@@ -693,18 +693,23 @@ async function callEdgeVision(systemPrompt, userPrompt, imageBase64){
 }
 
 async function callDalleE(prompt, size, style='vivid'){
+  // gpt-image-1 sizes (more photorealistic, used by ChatGPT)
+  // map any DALL-E sizes to gpt-image-1 equivalents
+  const gptSizeMap={'1792x1024':'1536x1024','1024x1792':'1024x1536','1024x1024':'1024x1024'};
+  const gptSize = gptSizeMap[size] || size;
   let res;
   try {
     res = await fetch(EDGE_URL, {
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPA_KEY,'apikey':SUPA_KEY},
-      body: JSON.stringify({prompt, size, quality:'hd', style})
+      body: JSON.stringify({prompt, size:gptSize, quality:'high', model:'gpt-image-1'})
     });
-  } catch(e){ throw new Error('Sin conexión: '+e.message); }
-  if(!res.ok){ let msg='Error DALL-E ('+res.status+')'; try{const d=await res.json();msg=d.error||msg;}catch(e2){} throw new Error(msg); }
+  } catch(e){ throw new Error('Sin conexión al servidor de imágenes: '+e.message); }
+  if(!res.ok){ let msg='Error generando imagen ('+res.status+')'; try{const d=await res.json();msg=d.error||msg;}catch(e2){} throw new Error(msg); }
   const d = await res.json();
-  if(d.error) throw new Error('DALL-E: '+d.error);
-  if(!d.image_b64) throw new Error('Sin imagen. Verifica el API key de OpenAI en Supabase Secrets.');
+  if(d.error) throw new Error(d.error);
+  if(!d.image_b64) throw new Error('Sin imagen en respuesta. Verifica el API key de OpenAI en Supabase Secrets.');
+  console.log('Image generated with:', d.model_used||'gpt-image-1');
   return 'data:image/png;base64,' + d.image_b64;
 }
 
@@ -1286,6 +1291,17 @@ async function generateCreativeGraphic(compressedImg, fullResImg, formData, slot
   const {prop,pc,randTitle,randCopy,hashtags,promoTxt,ctaText,addInfo,tipo} = formData;
   const style = CREATIVE_STYLES[slotIdx % 4];
 
+  // Extra art direction that changes every rehacer → forces GPT-4o to vary
+  const artDirections = [
+    'Usa tipografía serif bold para el título.',
+    'Usa tipografía sans-serif extrabold y mayúsculas para el título.',
+    'Aplica un leve efecto de color duotono sobre la imagen.',
+    'Añade una forma geométrica (círculo o rectángulo) de acento detrás del título.',
+    'Usa el color de acento de marca para un elemento decorativo (línea, borde, badge).',
+    'El fondo de la pieza debe respirar — usa mucho espacio negativo.',
+  ];
+  const artDir = artDirections[(slotIdx + reharceN * 3) % artDirections.length];
+
   const promoStr = promoTxt ? `PROMOCIÓN A MOSTRAR: ${promoTxt}` : '';
   const ctaStr = ctaText ? `CTA: ${ctaText} — inclúyelo como botón o badge llamativo` : '';
   const hashStr = hashtags ? `HASHTAGS (al final, pequeño): ${hashtags}` : '';
@@ -1307,6 +1323,8 @@ ${promoStr}
 ${ctaStr}
 ${hashStr}
 - Info adicional: ${addInfo||'ninguna'}
+
+TOQUE ARTÍSTICO ADICIONAL PARA ESTA VARIACIÓN: ${artDir}
 
 INSTRUCCIONES TÉCNICAS:
 - Usa la imagen con: <img src="##IMGSLOT##" style="...objeto y posición según el estilo..." alt="foto"/>
@@ -1346,9 +1364,10 @@ INSTRUCCIONES TÉCNICAS:
 
 // Maps tipo + platform to DALL-E size
 function dalleSize(tipo, platType){
-  if(tipo==='historia') return '1024x1792';
-  if(platType==='ig') return '1024x1024';
-  return '1792x1024';
+  // gpt-image-1 native sizes (photorealistic model)
+  if(tipo==='historia') return '1024x1536';  // 9:16 vertical
+  if(platType==='ig')   return '1024x1024';  // 1:1 square
+  return '1536x1024';                         // 1.5:1 landscape (FB/LI)
 }
 function buildDallePrompt(formData, platType){
   const {pc,tipo,randTitle,addInfo} = formData;
@@ -1409,7 +1428,7 @@ async function generateMockup(){
     <div style="text-align:center;">
       <div style="font-size:14px;font-weight:500;margin-bottom:6px;">${useUploaded
         ?'🎨 GPT-4o está diseñando con tus '+imgs.length+' imagen(es)...'
-        :'🖼️ DALL-E 3 generando imágenes HD...'}</div>
+        :'🖼️ gpt-image-1 generando imágenes fotorrealistas...'}</div>
       <div style="font-size:11px;opacity:.6;">Creando 4 propuestas con estilos distintos${reharceCount>1?' · variación '+reharceCount:''}</div>
     </div>
   </div>`;
@@ -1423,13 +1442,16 @@ async function generateMockup(){
       const compressed = await Promise.all(uniqueImgs.map(img => compressImage(img, 600, 600, 0.78)));
 
       // ── CALL GPT-4o Vision for each slot in PARALLEL ──────────────
+      // Rotate style assignment on each Rehacer so user gets different combos
+      const styleOffset = (reharceCount - 1) % 4; // 0,1,2,3,0,1,2,3...
       const calls = slotDefs.map((sd, i) => {
         const imgIdx = i % uniqueImgs.length;
+        const styleIdx = (i + styleOffset) % 4; // rotates on each rehacer
         return generateCreativeGraphic(
           compressed[imgIdx],   // compressed for API
           uniqueImgs[imgIdx],   // full res for display
           formData,
-          i,                    // slot index → determines style
+          styleIdx,             // ROTATED style index
           reharceCount          // variation seed
         );
       });
@@ -1467,7 +1489,7 @@ async function generateMockup(){
     disc.innerHTML=`<span>✨</span>
       <span>${useUploaded
         ?`GPT-4o diseñó con tus imágenes · 4 estilos diferentes`
-        :'DALL-E 3 HD · 4 estilos con overlay'
+        :'gpt-image-1 (PhotoRealistic) · 4 estilos'
       } · "<strong style="color:var(--gold);">${randTitle}</strong>"${reharceCount>1?` · variación ${reharceCount}`:''}</span>`;
     mc.appendChild(disc);
 
