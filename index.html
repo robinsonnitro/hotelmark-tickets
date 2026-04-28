@@ -656,6 +656,58 @@ const LOGOS = {
 const SUPA_URL='https://wrtljewcclhqogkedsib.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndydGxqZXdjY2xocW9na2Vkc2liIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY4NDAzNTUsImV4cCI6MjA4MjQxNjM1NX0.FzxNYfIHE4R5IItHR-RfR5ebXU2lKP8R6s4zGNkxY_w';
 const sb=supabase.createClient(SUPA_URL,SUPA_KEY);
+
+/* ── EDGE FUNCTION URLS ──────────────────────────────────────────────── */
+const EDGE_URL  = 'https://wrtljewcclhqogkedsib.supabase.co/functions/v1/generate-image';
+const EDGE_TEXT = 'https://wrtljewcclhqogkedsib.supabase.co/functions/v1/generate-text';
+
+/* ── EDGE HELPERS ─────────────────────────────────────────────────────── */
+async function callEdgeText(systemPrompt, userPrompt, mode='json'){
+  let res;
+  try {
+    res = await fetch(EDGE_TEXT, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPA_KEY,'apikey':SUPA_KEY},
+      body: JSON.stringify({mode, systemPrompt, userPrompt})
+    });
+  } catch(e){ throw new Error('Sin conexión al servidor: '+e.message); }
+  if(!res.ok){ let msg='Error servidor ('+res.status+')'; try{const d=await res.json();msg=d.error||msg;}catch(e2){} throw new Error(msg); }
+  const d = await res.json();
+  if(d.error) throw new Error(d.error);
+  return d.text || '';
+}
+
+async function callEdgeVision(systemPrompt, userPrompt, imageBase64){
+  let res;
+  try {
+    res = await fetch(EDGE_TEXT, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPA_KEY,'apikey':SUPA_KEY},
+      body: JSON.stringify({mode:'html-vision', systemPrompt, userPrompt, imageBase64})
+    });
+  } catch(e){ throw new Error('Sin conexión al servidor: '+e.message); }
+  if(!res.ok){ let msg='Error servidor ('+res.status+')'; try{const d=await res.json();msg=d.error||msg;}catch(e2){} throw new Error(msg); }
+  const d = await res.json();
+  if(d.error) throw new Error(d.error);
+  return (d.text||'').replace(/```html|```/g,'').trim();
+}
+
+async function callDalleE(prompt, size, style='vivid'){
+  let res;
+  try {
+    res = await fetch(EDGE_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPA_KEY,'apikey':SUPA_KEY},
+      body: JSON.stringify({prompt, size, quality:'hd', style})
+    });
+  } catch(e){ throw new Error('Sin conexión: '+e.message); }
+  if(!res.ok){ let msg='Error DALL-E ('+res.status+')'; try{const d=await res.json();msg=d.error||msg;}catch(e2){} throw new Error(msg); }
+  const d = await res.json();
+  if(d.error) throw new Error('DALL-E: '+d.error);
+  if(!d.image_b64) throw new Error('Sin imagen. Verifica el API key de OpenAI en Supabase Secrets.');
+  return 'data:image/png;base64,' + d.image_b64;
+}
+
 const PROP_LABELS={radisson_hotel:'Radisson Hotel',parkinn_hotel:'Park Inn Hotel',balandra:'Balandra',estacion_505:'Estación 505'};
 const PROP_PLATS={radisson_hotel:['linkedin','meta'],parkinn_hotel:['meta'],balandra:['meta'],estacion_505:['meta']};
 const PROP_NOTES={radisson_hotel:'LinkedIn + Meta (Instagram y Facebook propios)',parkinn_hotel:'Meta (Instagram y Facebook propios)',balandra:'Meta (Instagram propio de Balandra)',estacion_505:'⚠️ Publica en la cuenta Meta de Park Inn — sin cuenta propia'};
@@ -1303,20 +1355,7 @@ function buildDallePrompt(formData, platType){
   return `Professional hotel marketing photography for ${pc.nm}, Puerto Varas Chile Patagonia. ${addInfo?'Context: '+addInfo+'.':''} ${randTitle?'Theme: '+randTitle+'.':''} Luxury atmosphere, Lake Llanquihue, Osorno volcano, dramatic landscape. Cinematic lighting. NO text, NO logos, NO words. Clean composition with space for text overlay.`;
 }
 
-async function callDalleE(prompt, size){
-  let res;
-  try {
-    res = await fetch(EDGE_URL, {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPA_KEY,'apikey':SUPA_KEY},
-      body: JSON.stringify({prompt, size, quality:'hd', style:'vivid'})
-    });
-  } catch(e){ throw new Error('Sin conexión: '+e.message); }
-  const d = await res.json();
-  if(d.error) throw new Error('DALL-E: '+d.error);
-  if(!d.image_b64) throw new Error('Sin imagen. Verifica el API key de OpenAI en Supabase Secrets.');
-  return 'data:image/png;base64,' + d.image_b64;
-}
+// callDalleE defined above
 
 async function generateMockup(){
   reharceCount++; // Each call (including Rehacer) gets a unique seed
