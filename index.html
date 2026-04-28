@@ -867,13 +867,13 @@ async function generateCopies(){
   const btn=document.getElementById('btn-gen-copies');btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Generando...';
   const prop=document.getElementById('f-property').value,tipo=document.getElementById('f-type').value,titulo=document.getElementById('f-title').value,hashtags=document.getElementById('f-hashtags').value;
   try{
-    const prompt=`Eres experto en marketing hotelero para ${PROP_LABELS[prop]||'un hotel de lujo'}. Tipo de pieza: "${TYPE_LABELS[tipo]||tipo}". Título: "${titulo}". Copy original: "${c1}". ${hashtags?'Hashtags: '+hashtags:''}. Genera 4 variaciones con enfoques: emocional, urgencia, beneficio, pregunta. Responde SOLO con JSON array de 4 strings. Sin markdown.`;
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:800,messages:[{role:'user',content:prompt}]})});
-    const d=await res.json();
-    const copies=JSON.parse((d.content?.[0]?.text||'[]').replace(/```json|```/g,'').trim());
+    const sys=`Eres experto en marketing hotelero para ${PROP_LABELS[prop]||'hotel de lujo'} en la Patagonia. Copies breves con 1-2 emojis.`;
+    const usr=`Tipo: "${TYPE_LABELS[tipo]||tipo}". Título: "${titulo}". Copy original: "${c1}". ${hashtags?'Hashtags: '+hashtags:''}. Genera 4 variaciones: 1)emocional 2)urgencia 3)beneficio 4)pregunta. SOLO JSON array de 4 strings. Sin markdown.`;
+    const raw=await callEdgeText(sys,usr,'json');
+    const copies=JSON.parse(raw.replace(/```json|```/g,'').trim());
     copies.forEach((c,i)=>{const el=document.getElementById('copy-'+(i+2));if(el)el.value=c;});
     toast('✨ 4 copies generados con IA','success');
-  }catch(e){toast('Error: '+e.message,'error');}
+  }catch(e){toast('Error generando copies: '+e.message,'error');}
   finally{btn.disabled=false;btn.innerHTML='⚡ Generar 4 restantes con IA';}
 }
 
@@ -883,13 +883,13 @@ async function generateTitles(){
   const btn=document.getElementById('btn-gen-titles');btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Generando...';
   const prop=document.getElementById('f-property').value,tipo=document.getElementById('f-type').value;
   try{
-    const prompt=`Experto en marketing hotelero para ${PROP_LABELS[prop]||'hotel'}. Tipo: "${TYPE_LABELS[tipo]||tipo}". Título original: "${t1}". Genera 4 variaciones de headlines cortos e impactantes. SOLO JSON array de 4 strings. Sin markdown.`;
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:400,messages:[{role:'user',content:prompt}]})});
-    const d=await res.json();
-    const titles=JSON.parse((d.content?.[0]?.text||'[]').replace(/```json|```/g,'').trim());
+    const sys=`Experto en marketing hotelero para ${PROP_LABELS[prop]||'hotel de lujo'}. Headlines cortos, máx 8 palabras, con 1 emoji.`;
+    const usr=`Tipo: "${TYPE_LABELS[tipo]||tipo}". Título original: "${t1}". Genera 4 headlines: 1)emocional 2)directo 3)pregunta 4)con número. SOLO JSON array de 4 strings. Sin markdown.`;
+    const raw=await callEdgeText(sys,usr,'json');
+    const titles=JSON.parse(raw.replace(/```json|```/g,'').trim());
     titles.forEach((t,i)=>{const el=document.getElementById('title-'+(i+2));if(el)el.value=t;});
     toast('✨ 4 títulos generados con IA','success');
-  }catch(e){toast('Error: '+e.message,'error');}
+  }catch(e){toast('Error generando títulos: '+e.message,'error');}
   finally{btn.disabled=false;btn.innerHTML='⚡ Generar 4 restantes con IA';}
 }
 
@@ -976,7 +976,7 @@ function createGraphicIframe(fullHtmlDoc, extraStyle='') {
 }
 
 function buildFullDoc(graphicHtml) {
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box;}body{overflow:hidden;font-family:'DM Sans',system-ui,sans-serif;}</style><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/></head><body>${graphicHtml}</body></html>`;
+  return `<!DOCTYPE html><html style="height:100%;width:100%;margin:0;padding:0;"><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box;}html,body{width:100%;height:100%;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif;}</style><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/></head><body style="width:100%;height:100%;position:relative;">${graphicHtml}</body></html>`;
 }
 
 // ---- PLATFORM FRAME BUILDERS (return DOM element) ----
@@ -1123,84 +1123,129 @@ function makeLIFrame(fullDoc, propName, logoSmallSrc, captionText) {
 }
 
 // ---- MOCKUP GENERATION ----
-const EDGE_URL = 'https://wrtljewcclhqogkedsib.supabase.co/functions/v1/generate-image';
 
-// Maps tipo + platform to DALL-E size
-function dalleSize(tipo, platType){
-  if(tipo==='historia') return '1024x1792'; // 9:16 vertical
-  if(platType==='ig') return '1024x1024';   // 1:1 square
-  return '1792x1024';                        // 1.91:1 landscape (fb/li)
+const EDGE_URL  = 'https://wrtljewcclhqogkedsib.supabase.co/functions/v1/generate-image';
+const EDGE_TEXT = 'https://wrtljewcclhqogkedsib.supabase.co/functions/v1/generate-text';
+
+async function callEdgeText(systemPrompt, userPrompt, mode='json'){
+  let res;
+  try {
+    res = await fetch(EDGE_TEXT, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPA_KEY,'apikey':SUPA_KEY},
+      body: JSON.stringify({mode, systemPrompt, userPrompt})
+    });
+  } catch(e){ throw new Error('Sin conexión al servidor: '+e.message); }
+  const d = await res.json();
+  if(d.error) throw new Error(d.error);
+  return d.text || '';
 }
 
-// Build a detailed DALL-E 3 prompt for hotel marketing
-function buildDallePrompt(formData, platType){
-  const {pc, tipo, randTitle, addInfo, hashtags, promoTxt} = formData;
-  const typePrompts = {
-    post_feed: 'social media post, square format',
-    historia: 'Instagram story, vertical format',
-    grafica_digital: 'digital graphic, clean design',
-    grafica_impresa: 'printed flyer design',
-    post_linkedin: 'professional LinkedIn post, landscape',
-    campana: 'advertising campaign visual, landscape',
-    otro_tipo: 'marketing graphic'
-  };
-  const formatHint = typePrompts[tipo] || 'marketing graphic';
-  const isStory = tipo === 'historia';
-  const orientation = isStory ? 'vertical portrait orientation' : platType === 'ig' ? 'square composition' : 'wide landscape composition';
+// 4 different CSS overlay design styles to vary proposals
+const OVERLAY_STYLES = [
+  // Style A: gradient bottom, large title
+  (pc, randTitle, randCopy, promoHtml, ctaHtml, hashHtml, logosHtml) => `
+    <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.88) 0%,rgba(0,0,0,.4) 55%,rgba(0,0,0,.05) 100%);"></div>
+    <div style="position:absolute;top:14px;left:16px;background:transparent;">${logosHtml}</div>
+    <div style="position:absolute;bottom:0;left:0;right:0;padding:16px 18px 20px;">
+      <h2 style="color:#fff;font-size:22px;font-weight:800;line-height:1.2;text-shadow:0 2px 8px rgba(0,0,0,.6);margin-bottom:7px;">${randTitle}</h2>
+      <p style="color:rgba(255,255,255,.88);font-size:12px;line-height:1.5;">${randCopy}</p>
+      ${promoHtml}${ctaHtml}${hashHtml}
+    </div>`,
+  // Style B: dark top band + bright accent bottom strip
+  (pc, randTitle, randCopy, promoHtml, ctaHtml, hashHtml, logosHtml) => `
+    <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.72) 0%,transparent 45%,rgba(0,0,0,.08) 100%);"></div>
+    <div style="position:absolute;top:0;left:0;right:0;padding:14px 16px 20px;">
+      <div style="background:transparent;margin-bottom:10px;">${logosHtml}</div>
+      <h2 style="color:#fff;font-size:20px;font-weight:800;line-height:1.2;text-shadow:0 2px 8px rgba(0,0,0,.7);">${randTitle}</h2>
+    </div>
+    <div style="position:absolute;bottom:0;left:0;right:0;background:${pc.bg};padding:12px 16px;">
+      <p style="color:${pc.ac};font-size:12px;line-height:1.4;margin-bottom:6px;">${randCopy}</p>
+      ${promoHtml}${ctaHtml}${hashHtml}
+    </div>`,
+  // Style C: centered overlay on semi-transparent panel
+  (pc, randTitle, randCopy, promoHtml, ctaHtml, hashHtml, logosHtml) => `
+    <div style="position:absolute;inset:0;background:rgba(0,0,0,.35);"></div>
+    <div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);background:transparent;">${logosHtml}</div>
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:88%;background:rgba(0,0,0,.62);backdrop-filter:blur(4px);border-radius:12px;padding:18px 20px;text-align:center;">
+      <h2 style="color:#fff;font-size:20px;font-weight:800;margin-bottom:8px;">${randTitle}</h2>
+      <p style="color:rgba(255,255,255,.85);font-size:12px;line-height:1.5;margin-bottom:8px;">${randCopy}</p>
+      ${promoHtml}${ctaHtml}
+    </div>
+    <div style="position:absolute;bottom:10px;left:0;right:0;text-align:center;">${hashHtml}</div>`,
+  // Style D: left vertical color band
+  (pc, randTitle, randCopy, promoHtml, ctaHtml, hashHtml, logosHtml) => `
+    <div style="position:absolute;top:0;left:0;bottom:0;width:6px;background:${pc.ac};"></div>
+    <div style="position:absolute;inset:0;background:linear-gradient(to right,rgba(0,0,0,.75) 0%,rgba(0,0,0,.2) 50%,transparent 100%);"></div>
+    <div style="position:absolute;top:0;left:0;bottom:0;width:55%;padding:14px 14px 14px 20px;display:flex;flex-direction:column;justify-content:space-between;">
+      <div style="background:transparent;">${logosHtml}</div>
+      <div>
+        <h2 style="color:#fff;font-size:18px;font-weight:800;line-height:1.2;text-shadow:0 2px 6px rgba(0,0,0,.6);margin-bottom:7px;">${randTitle}</h2>
+        <p style="color:rgba(255,255,255,.85);font-size:11px;line-height:1.5;">${randCopy}</p>
+        ${promoHtml}${ctaHtml}
+      </div>
+      <div>${hashHtml}</div>
+    </div>`
+];
 
-  return `Professional hotel marketing photo for ${pc.nm}, Puerto Varas, Chile, Patagonia. ${formatHint}. ${orientation}. ${addInfo ? 'Context: '+addInfo+'.' : ''} ${randTitle ? 'Theme: '+randTitle+'.' : ''} ${promoTxt ? 'Promotion visual.' : ''} Luxury hotel atmosphere, dramatic Patagonian landscape, Lake Llanquihue, Osorno volcano, premium hospitality. Cinematic photography, moody natural lighting, rich colors matching brand palette ${pc.bg} and ${pc.ac}. Photorealistic, high-end commercial photography style. No text, no logos, no words in the image. Clean composition with visual breathing room for text overlay.`;
-}
-
-// Build HTML overlay (logo + text + CTA) to place on top of the image
-function buildOverlay(formData, logosHtml) {
+function buildOverlay(formData, logosHtml, styleIdx=0) {
   const {pc, randTitle, randCopy, hashtags, promoTxt, ctaText, tipo} = formData;
   const isStory = tipo === 'historia';
 
   const promoHtml = promoTxt ? (() => {
-    const match = promoTxt.match(/ANTES (.+?) → AHORA (.+?) \(/);
-    const antes = match?.[1] || '';
-    const ahora = match?.[2] || '';
+    const m = promoTxt.match(/ANTES (.+?) → AHORA (.+?) \(/);
+    const antes = m?.[1]||'', ahora = m?.[2]||'';
     const isDesde = promoTxt.includes('Desde');
-    const isMasIva = promoTxt.includes('IVA incluido') ? 'IVA incl.' : '+ IVA';
-    return `<div style="display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,.95);border-radius:8px;padding:8px 14px;margin-top:8px;">
-      <span style="text-decoration:line-through;color:#888;font-size:12px;">${antes}</span>
-      <span style="color:${pc.bg};font-size:20px;font-weight:800;">${isDesde?'Desde ':''} ${ahora}</span>
-      <span style="font-size:10px;color:#666;">${isMasIva}</span>
+    const ivaLabel = promoTxt.includes('IVA incluido')?'IVA incl.':'+ IVA';
+    return `<div style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.92);border-radius:6px;padding:6px 12px;margin-top:7px;">
+      <span style="text-decoration:line-through;color:#888;font-size:11px;">${antes}</span>
+      <span style="color:${pc.bg};font-size:18px;font-weight:800;">${isDesde?'Desde ':''} ${ahora}</span>
+      <span style="font-size:10px;color:#666;">${ivaLabel}</span>
     </div>`;
   })() : '';
 
   const ctaHtml = ctaText ? (() => {
-    const ctaLabels = {whatsapp:'💬 WhatsApp',web:'🌐 Ver más',link:'🔗 Más info',reservas:'🛎️ Reservar',email:'📧 Contactar',telefono:'📞 Llamar',otro_cta:'👉'};
-    const parts = ctaText.split(' → ');
-    const typeKey = parts[0]?.replace('CTA: ','').toLowerCase().replace(/ /g,'_') || '';
-    const label = Object.entries({whatsapp:'💬 WhatsApp',web:'🌐 Ver más',link:'🔗 Más info',reservas:'🛎️ Reservar',email:'📧 Contactar',telefono:'📞 Llamar'}).find(([k])=>ctaText.toLowerCase().includes(k))?.[1] || '👉 Más info';
-    return `<div style="margin-top:10px;"><a style="display:inline-block;background:${pc.ac};color:${pc.bg};font-weight:700;font-size:13px;padding:9px 18px;border-radius:24px;text-decoration:none;">${label}</a></div>`;
+    const ctaMap={whatsapp:'💬 WhatsApp',web:'🌐 Ver más',link:'🔗 Más info',reservas:'🛎️ Reservar ahora',email:'📧 Contactar',telefono:'📞 Llamar',otro_cta:'👉 Más info'};
+    const label = Object.entries(ctaMap).find(([k])=>ctaText.toLowerCase().includes(k))?.[1] || '👉 Más info';
+    return `<div style="margin-top:8px;"><span style="display:inline-block;background:${pc.ac};color:${pc.bg};font-weight:700;font-size:12px;padding:7px 16px;border-radius:20px;">${label}</span></div>`;
   })() : '';
 
-  const hashHtml = hashtags ? `<div style="margin-top:8px;font-size:11px;color:rgba(255,255,255,.7);line-height:1.8;">${hashtags}</div>` : '';
+  const hashHtml = hashtags ? `<div style="margin-top:6px;font-size:10px;color:rgba(255,255,255,.65);line-height:1.8;">${hashtags}</div>` : '';
 
   if(isStory){
-    // Story: logo top, big text centered, CTA bottom
-    return `<div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:20px 16px;">
-      <div style="background:transparent;">${logosHtml}</div>
-      <div style="text-align:center;">
-        <h2 style="color:#fff;font-size:28px;font-weight:800;line-height:1.2;text-shadow:0 2px 12px rgba(0,0,0,.7);margin-bottom:10px;">${randTitle}</h2>
-        <p style="color:rgba(255,255,255,.9);font-size:14px;line-height:1.5;text-shadow:0 1px 6px rgba(0,0,0,.6);">${randCopy}</p>
-        ${promoHtml}
-      </div>
-      <div style="text-align:center;">${ctaHtml}${hashHtml}</div>
-    </div>`;
-  } else {
-    // Feed/landscape: gradient bottom overlay
-    return `<div style="position:absolute;inset:0;">
-      <div style="position:absolute;top:0;left:0;right:0;padding:12px 14px;background:transparent;">${logosHtml}</div>
-      <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(to top,rgba(0,0,0,.85) 0%,rgba(0,0,0,.5) 50%,transparent 100%);padding:16px 16px 18px;">
-        <h2 style="color:#fff;font-size:18px;font-weight:800;line-height:1.2;text-shadow:0 1px 6px rgba(0,0,0,.5);margin-bottom:6px;">${randTitle}</h2>
-        <p style="color:rgba(255,255,255,.88);font-size:12px;line-height:1.4;text-shadow:0 1px 4px rgba(0,0,0,.4);">${randCopy}</p>
+    return `
+      <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.85) 0%,rgba(0,0,0,.3) 55%,rgba(0,0,0,.1) 100%);"></div>
+      <div style="position:absolute;top:18px;left:16px;background:transparent;">${logosHtml}</div>
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:18px 18px 24px;">
+        <h2 style="color:#fff;font-size:26px;font-weight:800;line-height:1.2;text-shadow:0 2px 12px rgba(0,0,0,.7);margin-bottom:10px;">${randTitle}</h2>
+        <p style="color:rgba(255,255,255,.88);font-size:13px;line-height:1.5;">${randCopy}</p>
         ${promoHtml}${ctaHtml}${hashHtml}
-      </div>
-    </div>`;
+      </div>`;
   }
+
+  // Use the style variant
+  const styleFn = OVERLAY_STYLES[styleIdx % OVERLAY_STYLES.length];
+  return styleFn(pc, randTitle, randCopy, promoHtml, ctaHtml, hashHtml, logosHtml);
+}
+
+// Maps tipo + platform to DALL-E size
+function dalleSize(tipo, platType){
+  if(tipo==='historia') return '1024x1792';
+  if(platType==='ig') return '1024x1024';
+  return '1792x1024';
+}
+
+// Build a detailed DALL-E 3 prompt for hotel marketing
+function buildDallePrompt(formData, platType){
+  const {pc, tipo, randTitle, addInfo} = formData;
+  const typePrompts = {
+    post_feed:'social media post square format',historia:'Instagram story vertical format',
+    grafica_digital:'digital graphic clean design',grafica_impresa:'printed flyer design',
+    post_linkedin:'professional LinkedIn post landscape',campana:'advertising campaign visual landscape',
+    otro_tipo:'marketing graphic'
+  };
+  const orientation = tipo==='historia'?'vertical portrait':'platType==="ig"?square composition":"wide landscape composition"';
+  return `Professional hotel marketing photography for ${pc.nm}, Puerto Varas, Chile, Patagonia region. ${typePrompts[tipo]||'marketing graphic'}. ${addInfo?'Context: '+addInfo+'.':''} ${randTitle?'Theme: '+randTitle+'.':''} Luxury hotel atmosphere, dramatic Patagonian landscape, Lake Llanquihue, Osorno volcano. Cinematic photography, moody natural lighting. No text, no logos, no words. Clean composition for text overlay.`;
 }
 
 // Call DALL-E 3 via Edge Function
@@ -1209,20 +1254,16 @@ async function callDalleE(prompt, size, style='vivid'){
   try {
     res = await fetch(EDGE_URL, {
       method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'Authorization':'Bearer '+SUPA_KEY,
-        'apikey':SUPA_KEY
-      },
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPA_KEY,'apikey':SUPA_KEY},
       body: JSON.stringify({prompt, size, quality:'hd', style})
     });
   } catch(netErr) {
-    throw new Error('No se pudo conectar con el servidor. Verifica tu conexión a internet. Detalle: '+netErr.message);
+    throw new Error('Sin conexión con el servidor. Verifica tu internet. '+netErr.message);
   }
   let d;
-  try { d = await res.json(); } catch(e) { throw new Error('Respuesta inválida del servidor (status '+res.status+')'); }
-  if(d.error) throw new Error('OpenAI: '+d.error);
-  if(!d.image_b64) throw new Error('La respuesta no contiene imagen. Revisa el API key en Supabase Secrets.');
+  try { d = await res.json(); } catch(e) { throw new Error('Respuesta inválida (status '+res.status+')'); }
+  if(d.error) throw new Error('DALL-E: '+d.error);
+  if(!d.image_b64) throw new Error('Sin imagen en respuesta. Verifica el API key de OpenAI en Supabase Secrets.');
   return 'data:image/png;base64,' + d.image_b64;
 }
 
@@ -1241,10 +1282,8 @@ async function generateMockup(){
   const ctaValue=document.getElementById('f-cta-value').value.trim();
   const ctaLabels={whatsapp:'💬 WhatsApp',web:'🌐 Página web',link:'🔗 Link',reservas:'🛎️ Reservas',email:'📧 Email',telefono:'📞 Teléfono',otro_cta:'📌 CTA'};
   const ctaText=ctaType&&ctaValue?`CTA: ${ctaLabels[ctaType]||ctaType} → ${ctaValue}`:'';
-
   const randCopy=getRandCopy()||titulo;
   const randTitle=getRandTitle()||titulo;
-
   const platforms=Array.from(document.querySelectorAll('.plat-check input:checked')).map(c=>c.value);
   const hasMeta=platforms.includes('meta')||platforms.length===0;
   const hasLI=platforms.includes('linkedin');
@@ -1257,9 +1296,8 @@ async function generateMockup(){
   };
   const pc=propColors[prop]||propColors.radisson_hotel;
   const logoSrc=prop==='parkinn_hotel'||prop==='estacion_505'?LOGOS.parkinn:LOGOS.radisson_light;
-  const logosHtml=getLogosHtml(prop,false); // light for overlay on dark photos
+  const logosHtml=getLogosHtml(prop,false);
   const promoTxt=hasPromo&&precioAhora?`ANTES ${precioAntes} → AHORA ${precioAhora} (${tipoPrecio==='desde'?'Desde':'Precio fijo'}, ${iva==='mas_iva'?'+ IVA':'IVA incluido'})`:'';
-
   const formData={prop,pc,tipo,randTitle,randCopy,addInfo,hashtags,promoTxt,ctaText};
 
   const isStory=tipo==='historia';
@@ -1272,57 +1310,46 @@ async function generateMockup(){
   const imgs=uploadedImages.filter(Boolean);
   const useUploaded=imgs.length>0;
 
-  // Open modal
   document.getElementById('mockup-overlay').classList.add('open');
   const mc=document.getElementById('mockup-content');
   mc.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:70px 40px;color:var(--w60);">
     <span class="spinner spinner-gold" style="width:36px;height:36px;border-width:3px;"></span>
     <div style="text-align:center;">
-      <div style="font-size:14px;font-weight:500;">${useUploaded?'Componiendo gráficas con tus imágenes...':'Generando imágenes con DALL-E 3...'}</div>
-      <div style="font-size:11px;margin-top:4px;opacity:.6;">${useUploaded?'Combinando tus fotos con el diseño de marca':'Esto toma unos segundos · Calidad HD'}</div>
+      <div style="font-size:14px;font-weight:500;">${useUploaded?'Generando '+imgs.length+' propuestas con tus imágenes...':'Generando imágenes con DALL-E 3 HD...'}</div>
+      <div style="font-size:11px;margin-top:4px;opacity:.6;">Creando 4 propuestas con estilos distintos</div>
     </div>
   </div>`;
 
   try{
-    // Determine unique background images needed
-    // If user uploaded: use those (cycle if needed)
-    // If no uploads: generate with DALL-E (2 variations in parallel, then reuse)
-    let bgImages = []; // array of data URLs, one per slot
+    // ── GET BACKGROUND IMAGES ─────────────────────────────────────────
+    // Each slot gets: a bgImage + a style index (0-3) → 4 visually different proposals
+    let bgImages = []; // base64 data URLs, one per slot
 
     if(useUploaded){
-      // Map uploaded images to slots
+      // Distribute uploaded images across 4 slots
       slotDefs.forEach((_,i)=> bgImages.push(imgs[i % imgs.length]));
     } else {
-      // Generate 2 DALL-E images (one per format: square + landscape)
-      const uniqueTypes=[...new Set(slotDefs.map(s=>s.type))];
-      const dalle_jobs = uniqueTypes.map(ptype=>({
-        ptype,
-        size: dalleSize(tipo, ptype),
-        prompt: buildDallePrompt(formData, ptype)
-      }));
-      // Remove duplicate sizes
-      const seen=new Set();
-      const unique_jobs=dalle_jobs.filter(j=>{if(seen.has(j.size))return false;seen.add(j.size);return true;});
-
-      const results = await Promise.all(unique_jobs.map(j=>callDalleE(j.prompt, j.size)));
+      // Generate DALL-E images: 1 per unique size needed
+      const uniqueSizes=[...new Set(slotDefs.map(sd=>dalleSize(tipo,sd.type)))];
+      const dallePrompt=buildDallePrompt(formData,'ig');
+      const dalleResults=await Promise.all(
+        uniqueSizes.map(size=>callDalleE(dallePrompt,size))
+      );
       const sizeMap={};
-      unique_jobs.forEach((j,i)=>sizeMap[j.size]=results[i]);
-
-      slotDefs.forEach(sd=> bgImages.push(sizeMap[dalleSize(tipo,sd.type)]||results[0]));
+      uniqueSizes.forEach((s,i)=>sizeMap[s]=dalleResults[i]);
+      slotDefs.forEach(sd=>bgImages.push(sizeMap[dalleSize(tipo,sd.type)]||dalleResults[0]));
     }
 
-    // Build overlay HTML (same for all slots, text/logo)
-    const overlayHtml=buildOverlay(formData, logosHtml);
-
-    // Render platform frames
+    // ── BUILD 4 FRAMES ────────────────────────────────────────────────
     const labels={'ig':'📸 Instagram','fb':'📘 Facebook','li':'💼 LinkedIn'};
     const labelBgs={'ig':'#e1306c','fb':'#1877f2','li':'#0a66c2'};
     const ratioLabels={'ig':isStory?'9:16':'1:1','fb':'1.91:1','li':'1.91:1'};
+    const styleNames=['Gradiente base','Banda superior','Panel centrado','Franja lateral'];
 
     mc.innerHTML='';
     const disc=document.createElement('div');
     disc.style.cssText='background:var(--bg3);border-radius:6px;padding:10px 14px;margin-bottom:18px;font-size:12px;color:var(--w60);display:flex;align-items:center;gap:8px;';
-    disc.innerHTML=`<span>✨</span><span>${useUploaded?`Tus ${imgs.length} imagen(es) usadas como base gráfica`:'Imágenes generadas con DALL-E 3 HD'} · Copy: <strong style="color:var(--gold);">"${randTitle}"</strong></span>`;
+    disc.innerHTML=`<span>✨</span><span>${useUploaded?`${imgs.length} imagen(es) tuyas · 4 estilos diferentes`:'DALL-E 3 HD · 4 estilos diferentes'} · Copy: <strong style="color:var(--gold);">"${randTitle}"</strong></span>`;
     mc.appendChild(disc);
 
     const grid=document.createElement('div');
@@ -1332,17 +1359,26 @@ async function generateMockup(){
     slotDefs.forEach((sd,i)=>{
       const {type,ratio}=sd;
       const bgUrl=bgImages[i];
+      const styleIdx=i; // Each slot uses a different overlay style (0,1,2,3)
+
+      // Build the graphic: image + overlay
+      const overlayHtml=buildOverlay(formData,logosHtml,styleIdx);
+      const graphicInner=`<div style="position:relative;width:100%;height:100%;overflow:hidden;">
+        <img src="${bgUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;" alt=""/>
+        ${overlayHtml}
+      </div>`;
+      const fullDoc=buildFullDoc(graphicInner);
 
       const cell=document.createElement('div');
       const imgLabel=useUploaded?` · 📷${(i%imgs.length)+1}`:'';
       const badge=document.createElement('div');
-      badge.style.cssText='margin-bottom:8px;display:flex;align-items:center;gap:6px;';
-      badge.innerHTML=`<span style="background:${labelBgs[type]};border-radius:4px;padding:3px 8px;color:#fff;font-size:11px;font-weight:600;">${labels[type]}${imgLabel}</span><span style="font-size:10px;color:var(--w30);background:var(--bg3);padding:2px 7px;border-radius:4px;">${ratioLabels[type]}</span>${!useUploaded?'<span style="font-size:10px;color:var(--w30);background:var(--bg3);padding:2px 7px;border-radius:4px;">DALL-E 3 HD</span>':''}`;
+      badge.style.cssText='margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;';
+      badge.innerHTML=`
+        <span style="background:${labelBgs[type]};border-radius:4px;padding:3px 8px;color:#fff;font-size:11px;font-weight:600;">${labels[type]}${imgLabel}</span>
+        <span style="font-size:10px;color:var(--w30);background:var(--bg3);padding:2px 7px;border-radius:4px;">${ratioLabels[type]}</span>
+        <span style="font-size:10px;color:var(--w30);background:var(--bg3);padding:2px 7px;border-radius:4px;">Estilo ${styleIdx+1}: ${styleNames[styleIdx]}</span>`;
 
       let frame;
-      const graphicInner=`<div style="position:relative;width:100%;height:100%;"><img src="${bgUrl}" style="width:100%;height:100%;object-fit:cover;display:block;" alt=""/>${overlayHtml}</div>`;
-      const fullDoc=buildFullDoc(graphicInner);
-
       if(type==='ig') frame=makeIGFrame(fullDoc,pc.nm,logoSrc,ratio);
       else if(type==='fb') frame=makeFBFrame(fullDoc,pc.nm,logoSrc,randCopy,ratio==='9:16'?'1:1':'1.91:1');
       else frame=makeLIFrame(fullDoc,pc.nm,logoSrc,randCopy);
@@ -1356,8 +1392,7 @@ async function generateMockup(){
     mc.innerHTML=`<div style="padding:30px;text-align:center;color:var(--red);">
       <div style="font-size:24px;margin-bottom:10px;">⚠️</div>
       <div style="margin-bottom:8px;">${e.message}</div>
-      <div style="font-size:11px;color:var(--w30);margin-bottom:16px;">Verifica que el API key de OpenAI esté guardado en Supabase Secrets como OPENAI_API_KEY</div>
-      <button class="btn btn-ghost btn-sm" onclick="generateMockup()">↺ Reintentar</button>
+      <button class="btn btn-ghost btn-sm" onclick="generateMockup()" style="margin-top:12px;">↺ Reintentar</button>
     </div>`;
   }
 }
