@@ -1044,7 +1044,7 @@ function makeFBFrame(fullDoc, propName, logoSmallSrc, captionText, ratio='1.91:1
   const header = document.createElement('div');
   header.style.cssText = 'display:flex;align-items:flex-start;gap:9px;padding:12px 14px 8px;';
   header.innerHTML = `
-    <div style="width:40px;height:40px;border-radius:50%;overflow:hidden;flex-shrink:0;background:transparent;display:flex;align-items:center;justify-content:center;">
+    <div style="width:40px;height:40px;border-radius:50%;overflow:hidden;flex-shrink:0;background:#fff;display:flex;align-items:center;justify-content:center;">
       <img src="${logoSmallSrc}" style="width:36px;height:36px;object-fit:contain;background:transparent;" alt="logo"/>
     </div>
     <div>
@@ -1085,7 +1085,7 @@ function makeLIFrame(fullDoc, propName, logoSmallSrc, captionText) {
   const header = document.createElement('div');
   header.style.cssText = 'display:flex;align-items:flex-start;gap:10px;padding:14px 16px 10px;';
   header.innerHTML = `
-    <div style="width:48px;height:48px;border-radius:4px;overflow:hidden;flex-shrink:0;background:transparent;display:flex;align-items:center;justify-content:center;">
+    <div style="width:48px;height:48px;border-radius:4px;overflow:hidden;flex-shrink:0;background:#f0f2f5;display:flex;align-items:center;justify-content:center;">
       <img src="${logoSmallSrc}" style="width:44px;height:44px;object-fit:contain;background:transparent;" alt="logo"/>
     </div>
     <div style="flex:1;">
@@ -1122,110 +1122,174 @@ function makeLIFrame(fullDoc, propName, logoSmallSrc, captionText) {
   return wrap;
 }
 
+
+// ── SIMPLE OVERLAY for DALL-E path (4 styles, no AI involvement) ──────
+const OVERLAY_STYLES = [
+  (pc,rt,rc,promoH,ctaH,hashH)=>`
+    <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.82) 0%,rgba(0,0,0,.35) 52%,transparent 100%);"></div>
+    <div style="position:absolute;bottom:0;left:0;right:0;padding:16px 18px 20px;">
+      <h2 style="color:#fff;font-size:21px;font-weight:800;line-height:1.2;text-shadow:0 2px 8px rgba(0,0,0,.6);margin-bottom:7px;">${rt}</h2>
+      <p style="color:rgba(255,255,255,.87);font-size:12px;line-height:1.5;">${rc}</p>
+      ${promoH}${ctaH}${hashH}</div>`,
+  (pc,rt,rc,promoH,ctaH,hashH)=>`
+    <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.72) 0%,transparent 45%);"></div>
+    <div style="position:absolute;top:0;left:0;right:0;padding:14px 16px 24px;">
+      <h2 style="color:#fff;font-size:20px;font-weight:800;text-shadow:0 2px 8px rgba(0,0,0,.7);">${rt}</h2>
+    </div>
+    <div style="position:absolute;bottom:0;left:0;right:0;background:${pc.bg};padding:11px 16px;">
+      <p style="color:${pc.ac};font-size:12px;line-height:1.4;margin-bottom:4px;">${rc}</p>
+      ${promoH}${ctaH}${hashH}</div>`,
+  (pc,rt,rc,promoH,ctaH,hashH)=>`
+    <div style="position:absolute;inset:0;background:rgba(0,0,0,.28);"></div>
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:86%;background:rgba(0,0,0,.65);backdrop-filter:blur(3px);border-radius:10px;padding:16px 18px;text-align:center;">
+      <h2 style="color:#fff;font-size:19px;font-weight:800;margin-bottom:7px;">${rt}</h2>
+      <p style="color:rgba(255,255,255,.85);font-size:12px;line-height:1.5;">${rc}</p>
+      ${promoH}${ctaH}
+    </div>
+    <div style="position:absolute;bottom:10px;left:0;right:0;text-align:center;">${hashH}</div>`,
+  (pc,rt,rc,promoH,ctaH,hashH)=>`
+    <div style="position:absolute;top:0;left:0;bottom:0;width:5px;background:${pc.ac};"></div>
+    <div style="position:absolute;inset:0;background:linear-gradient(to right,rgba(0,0,0,.78) 0%,rgba(0,0,0,.18) 50%,transparent 100%);"></div>
+    <div style="position:absolute;top:0;left:0;bottom:0;width:56%;padding:14px 14px 14px 18px;display:flex;flex-direction:column;justify-content:flex-end;gap:5px;">
+      <h2 style="color:#fff;font-size:18px;font-weight:800;line-height:1.2;text-shadow:0 2px 6px rgba(0,0,0,.5);">${rt}</h2>
+      <p style="color:rgba(255,255,255,.85);font-size:11px;line-height:1.5;">${rc}</p>
+      ${promoH}${ctaH}${hashH}</div>`
+];
+
+function buildOverlay(formData, styleIdx){
+  const {pc,randTitle,randCopy,hashtags,promoTxt,ctaText}=formData;
+  const promoHtml=promoTxt?`<div style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.92);border-radius:6px;padding:5px 10px;margin-top:6px;"><span style="text-decoration:line-through;color:#888;font-size:11px;">${promoTxt.split('→')[0].replace('ANTES ','')}</span><span style="color:${pc.bg};font-size:16px;font-weight:800;">${promoTxt.split('→')[1]?.split('(')[0]?.trim()||''}</span></div>`:'';
+  const ctaHtml=ctaText?`<div style="margin-top:7px;"><span style="display:inline-block;background:${pc.ac};color:${pc.bg};font-weight:700;font-size:12px;padding:6px 14px;border-radius:18px;">${ctaText.split(':')[0]}</span></div>`:'';
+  const hashHtml=hashtags?`<div style="margin-top:5px;font-size:10px;color:rgba(255,255,255,.6);">${hashtags}</div>`:'';
+  return OVERLAY_STYLES[styleIdx%4](pc,randTitle,randCopy,promoHtml,ctaHtml,hashHtml);
+}
+
 // ---- MOCKUP GENERATION ----
 
-const EDGE_URL  = 'https://wrtljewcclhqogkedsib.supabase.co/functions/v1/generate-image';
-const EDGE_TEXT = 'https://wrtljewcclhqogkedsib.supabase.co/functions/v1/generate-text';
+let reharceCount = 0; // increments on each rehacer → ensures variation
 
-async function callEdgeText(systemPrompt, userPrompt, mode='json'){
+// ── IMAGE COMPRESSION ─────────────────────────────────────────────────
+async function compressImage(dataUrl, maxW=640, maxH=640, quality=0.78){
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      if(w > maxW){ h = Math.round(h*(maxW/w)); w = maxW; }
+      if(h > maxH){ w = Math.round(w*(maxH/h)); h = maxH; }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.src = dataUrl;
+  });
+}
+
+// ── LOGO HTML (transparent, bottom-right of graphic) ─────────────────
+function logoOverlayHtml(prop){
+  // Always transparent — logo goes bottom-right of graphic, NOT top (to avoid colliding with platform header)
+  const logoSrc = prop==='parkinn_hotel'||prop==='estacion_505' ? LOGOS.parkinn : LOGOS.radisson_dark;
+  const logoSrc2 = prop==='balandra' ? LOGOS.balandra : null;
+  const size = prop==='balandra' ? '28px' : '36px';
+  const logoImg = `<img src="${logoSrc}" style="height:${size};max-width:120px;object-fit:contain;mix-blend-mode:screen;filter:brightness(10) saturate(0);opacity:.9;" alt="logo"/>`;
+  if(logoSrc2){
+    const logo2 = `<img src="${logoSrc2}" style="height:28px;max-width:80px;object-fit:contain;opacity:.85;" alt="logo2"/>`;
+    return `<div style="position:absolute;bottom:10px;right:10px;display:flex;align-items:center;gap:6px;z-index:10;">${logoImg}${logo2}</div>`;
+  }
+  return `<div style="position:absolute;bottom:10px;right:10px;z-index:10;">${logoImg}</div>`;
+}
+
+// ── CALL EDGE FUNCTION WITH IMAGE (GPT-4o Vision) ────────────────────
+async function callEdgeVision(systemPrompt, userPrompt, imgDataUrl){
   let res;
   try {
     res = await fetch(EDGE_TEXT, {
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPA_KEY,'apikey':SUPA_KEY},
-      body: JSON.stringify({mode, systemPrompt, userPrompt})
+      body: JSON.stringify({mode:'html-vision', systemPrompt, userPrompt, imageBase64: imgDataUrl})
     });
-  } catch(e){ throw new Error('Sin conexión al servidor: '+e.message); }
+  } catch(e){ throw new Error('Sin conexión: '+e.message); }
   const d = await res.json();
   if(d.error) throw new Error(d.error);
-  return d.text || '';
+  return (d.text||'').replace(/```html|```/g,'').trim();
 }
 
-// 4 different CSS overlay design styles to vary proposals
-const OVERLAY_STYLES = [
-  // Style A: gradient bottom, large title
-  (pc, randTitle, randCopy, promoHtml, ctaHtml, hashHtml, logosHtml) => `
-    <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.88) 0%,rgba(0,0,0,.4) 55%,rgba(0,0,0,.05) 100%);"></div>
-    <div style="position:absolute;top:14px;left:16px;background:transparent;">${logosHtml}</div>
-    <div style="position:absolute;bottom:0;left:0;right:0;padding:16px 18px 20px;">
-      <h2 style="color:#fff;font-size:22px;font-weight:800;line-height:1.2;text-shadow:0 2px 8px rgba(0,0,0,.6);margin-bottom:7px;">${randTitle}</h2>
-      <p style="color:rgba(255,255,255,.88);font-size:12px;line-height:1.5;">${randCopy}</p>
-      ${promoHtml}${ctaHtml}${hashHtml}
-    </div>`,
-  // Style B: dark top band + bright accent bottom strip
-  (pc, randTitle, randCopy, promoHtml, ctaHtml, hashHtml, logosHtml) => `
-    <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.72) 0%,transparent 45%,rgba(0,0,0,.08) 100%);"></div>
-    <div style="position:absolute;top:0;left:0;right:0;padding:14px 16px 20px;">
-      <div style="background:transparent;margin-bottom:10px;">${logosHtml}</div>
-      <h2 style="color:#fff;font-size:20px;font-weight:800;line-height:1.2;text-shadow:0 2px 8px rgba(0,0,0,.7);">${randTitle}</h2>
-    </div>
-    <div style="position:absolute;bottom:0;left:0;right:0;background:${pc.bg};padding:12px 16px;">
-      <p style="color:${pc.ac};font-size:12px;line-height:1.4;margin-bottom:6px;">${randCopy}</p>
-      ${promoHtml}${ctaHtml}${hashHtml}
-    </div>`,
-  // Style C: centered overlay on semi-transparent panel
-  (pc, randTitle, randCopy, promoHtml, ctaHtml, hashHtml, logosHtml) => `
-    <div style="position:absolute;inset:0;background:rgba(0,0,0,.35);"></div>
-    <div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);background:transparent;">${logosHtml}</div>
-    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:88%;background:rgba(0,0,0,.62);backdrop-filter:blur(4px);border-radius:12px;padding:18px 20px;text-align:center;">
-      <h2 style="color:#fff;font-size:20px;font-weight:800;margin-bottom:8px;">${randTitle}</h2>
-      <p style="color:rgba(255,255,255,.85);font-size:12px;line-height:1.5;margin-bottom:8px;">${randCopy}</p>
-      ${promoHtml}${ctaHtml}
-    </div>
-    <div style="position:absolute;bottom:10px;left:0;right:0;text-align:center;">${hashHtml}</div>`,
-  // Style D: left vertical color band
-  (pc, randTitle, randCopy, promoHtml, ctaHtml, hashHtml, logosHtml) => `
-    <div style="position:absolute;top:0;left:0;bottom:0;width:6px;background:${pc.ac};"></div>
-    <div style="position:absolute;inset:0;background:linear-gradient(to right,rgba(0,0,0,.75) 0%,rgba(0,0,0,.2) 50%,transparent 100%);"></div>
-    <div style="position:absolute;top:0;left:0;bottom:0;width:55%;padding:14px 14px 14px 20px;display:flex;flex-direction:column;justify-content:space-between;">
-      <div style="background:transparent;">${logosHtml}</div>
-      <div>
-        <h2 style="color:#fff;font-size:18px;font-weight:800;line-height:1.2;text-shadow:0 2px 6px rgba(0,0,0,.6);margin-bottom:7px;">${randTitle}</h2>
-        <p style="color:rgba(255,255,255,.85);font-size:11px;line-height:1.5;">${randCopy}</p>
-        ${promoHtml}${ctaHtml}
-      </div>
-      <div>${hashHtml}</div>
-    </div>`
+// ── GENERATE ONE CREATIVE GRAPHIC (GPT-4o sees the image) ─────────────
+const CREATIVE_STYLES = [
+  // Style 0: Full bleed, dark gradient bottom, title large at bottom
+  { name:'Fondo completo',
+    desc:'La imagen ocupa el 100% del espacio como fondo (object-fit:cover). Gradiente oscuro suave de abajo hacia arriba (rgba 0,0,0,.78 → transparent). Título grande (22-26px, bold, blanco, sombra) en la zona inferior. Copy en blanco semitransparente debajo del título. Logo oculto (lo ponemos nosotros). Composición cinematográfica y premium.' },
+  // Style 1: Left color band + image right
+  { name:'Banda lateral de marca',
+    desc:'División vertical: 38% izquierda con el color principal de marca (sólido), 62% derecha con la imagen (object-fit:cover). En la franja de color: logo (si hay) arriba, título en blanco bold centrado verticalmente, copy pequeño. Línea de acento horizontal en color secundario. Estilo editorial moderno.' },
+  // Style 2: Magazine with CSS treatment
+  { name:'Estilo magazine',
+    desc:'Imagen a pantalla completa con filtro CSS: saturate(1.3) contrast(1.1) brightness(0.9). Overlay geométrico: rectángulo de color de marca al 70% de opacidad en esquina inferior izquierda (60% ancho, 40% alto). Título en blanco grande dentro del rectángulo. Línea diagonal de acento. Copy pequeño en blanco. Estética editorial de lujo.' },
+  // Style 3: Polaroid / card
+  { name:'Marco editorial',
+    desc:'Imagen en área superior (70% del alto) con leve padding/marco blanco de 8px. Área inferior (30%) con fondo blanco o color de marca muy claro. Título en color de marca (oscuro y bold) en el área inferior. Copy pequeño en gris. Precio/promo destacado si hay. Estilo limpio y profesional como tarjeta de producto.' },
 ];
 
-function buildOverlay(formData, logosHtml, styleIdx=0) {
-  const {pc, randTitle, randCopy, hashtags, promoTxt, ctaText, tipo} = formData;
-  const isStory = tipo === 'historia';
+async function generateCreativeGraphic(compressedImg, fullResImg, formData, slotIdx, reharceN){
+  const {prop,pc,randTitle,randCopy,hashtags,promoTxt,ctaText,addInfo,tipo} = formData;
+  const style = CREATIVE_STYLES[slotIdx % 4];
 
-  const promoHtml = promoTxt ? (() => {
-    const m = promoTxt.match(/ANTES (.+?) → AHORA (.+?) \(/);
-    const antes = m?.[1]||'', ahora = m?.[2]||'';
-    const isDesde = promoTxt.includes('Desde');
-    const ivaLabel = promoTxt.includes('IVA incluido')?'IVA incl.':'+ IVA';
-    return `<div style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.92);border-radius:6px;padding:6px 12px;margin-top:7px;">
-      <span style="text-decoration:line-through;color:#888;font-size:11px;">${antes}</span>
-      <span style="color:${pc.bg};font-size:18px;font-weight:800;">${isDesde?'Desde ':''} ${ahora}</span>
-      <span style="font-size:10px;color:#666;">${ivaLabel}</span>
+  const promoStr = promoTxt ? `PROMOCIÓN A MOSTRAR: ${promoTxt}` : '';
+  const ctaStr = ctaText ? `CTA: ${ctaText} — inclúyelo como botón o badge llamativo` : '';
+  const hashStr = hashtags ? `HASHTAGS (al final, pequeño): ${hashtags}` : '';
+
+  const sys = `Eres un diseñador gráfico senior especialista en marketing hotelero de lujo. Creas piezas para redes sociales que se ven profesionales, no genéricas. Usas CSS completamente inline.`;
+
+  const usr = `Analiza la imagen adjunta y crea el HTML de una pieza gráfica de marketing para ${pc.nm}.
+
+ESTILO DE DISEÑO PARA ESTA PROPUESTA (N°${slotIdx+1}${reharceN>0?' · variación '+reharceN:''}):
+${style.desc}
+
+DATOS DE LA PIEZA:
+- Propiedad: ${pc.nm}
+- Tipo: ${TYPE_LABELS[tipo]||tipo}
+- Título: "${randTitle}"
+- Copy: "${randCopy}"
+- Color principal: ${pc.bg} | Color acento: ${pc.ac} | Secundario: ${pc.sec}
+${promoStr}
+${ctaStr}
+${hashStr}
+- Info adicional: ${addInfo||'ninguna'}
+
+INSTRUCCIONES TÉCNICAS:
+- Usa la imagen con: <img src="##IMGSLOT##" style="...objeto y posición según el estilo..." alt="foto"/>
+- NO incluyas logo (lo añadimos nosotros por separado)
+- El div raíz debe ser: <div style="width:100%;height:100%;position:relative;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif;">
+- CSS 100% inline, sin clases externas
+- Responde SOLO con el HTML del div raíz. Sin DOCTYPE, sin html/head/body, sin backticks.
+- Variación ${reharceN}: añade pequeñas diferencias creativas respecto a la composición base`;
+
+  let html = await callEdgeVision(sys, usr, compressedImg);
+
+  // Replace ##IMGSLOT## with the full resolution image for display quality
+  html = html.split('##IMGSLOT##').join(fullResImg);
+
+  // Safety fallback: if AI didn't use the image tag, inject it as background
+  if(!html.includes(fullResImg) && !html.includes('##IMGSLOT##')){
+    html = `<div style="width:100%;height:100%;position:relative;overflow:hidden;">
+      <img src="${fullResImg}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" alt="foto"/>
+      <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.8) 0%,rgba(0,0,0,.3) 55%,transparent 100%);"></div>
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:16px 18px 20px;">
+        <h2 style="color:#fff;font-size:22px;font-weight:800;line-height:1.2;text-shadow:0 2px 8px rgba(0,0,0,.6);margin-bottom:7px;">${randTitle}</h2>
+        <p style="color:rgba(255,255,255,.88);font-size:12px;line-height:1.5;">${randCopy}</p>
+      </div>
     </div>`;
-  })() : '';
-
-  const ctaHtml = ctaText ? (() => {
-    const ctaMap={whatsapp:'💬 WhatsApp',web:'🌐 Ver más',link:'🔗 Más info',reservas:'🛎️ Reservar ahora',email:'📧 Contactar',telefono:'📞 Llamar',otro_cta:'👉 Más info'};
-    const label = Object.entries(ctaMap).find(([k])=>ctaText.toLowerCase().includes(k))?.[1] || '👉 Más info';
-    return `<div style="margin-top:8px;"><span style="display:inline-block;background:${pc.ac};color:${pc.bg};font-weight:700;font-size:12px;padding:7px 16px;border-radius:20px;">${label}</span></div>`;
-  })() : '';
-
-  const hashHtml = hashtags ? `<div style="margin-top:6px;font-size:10px;color:rgba(255,255,255,.65);line-height:1.8;">${hashtags}</div>` : '';
-
-  if(isStory){
-    return `
-      <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.85) 0%,rgba(0,0,0,.3) 55%,rgba(0,0,0,.1) 100%);"></div>
-      <div style="position:absolute;top:18px;left:16px;background:transparent;">${logosHtml}</div>
-      <div style="position:absolute;bottom:0;left:0;right:0;padding:18px 18px 24px;">
-        <h2 style="color:#fff;font-size:26px;font-weight:800;line-height:1.2;text-shadow:0 2px 12px rgba(0,0,0,.7);margin-bottom:10px;">${randTitle}</h2>
-        <p style="color:rgba(255,255,255,.88);font-size:13px;line-height:1.5;">${randCopy}</p>
-        ${promoHtml}${ctaHtml}${hashHtml}
-      </div>`;
   }
 
-  // Use the style variant
-  const styleFn = OVERLAY_STYLES[styleIdx % OVERLAY_STYLES.length];
-  return styleFn(pc, randTitle, randCopy, promoHtml, ctaHtml, hashHtml, logosHtml);
+  // Append logo overlay (bottom-right, transparent)
+  const logoHtml = logoOverlayHtml(prop);
+  // Insert logo before closing div
+  const lastClose = html.lastIndexOf('</div>');
+  if(lastClose > -1){
+    html = html.slice(0, lastClose) + logoHtml + html.slice(lastClose);
+  }
+
+  return html;
 }
 
 // Maps tipo + platform to DALL-E size
@@ -1234,40 +1298,29 @@ function dalleSize(tipo, platType){
   if(platType==='ig') return '1024x1024';
   return '1792x1024';
 }
-
-// Build a detailed DALL-E 3 prompt for hotel marketing
 function buildDallePrompt(formData, platType){
-  const {pc, tipo, randTitle, addInfo} = formData;
-  const typePrompts = {
-    post_feed:'social media post square format',historia:'Instagram story vertical format',
-    grafica_digital:'digital graphic clean design',grafica_impresa:'printed flyer design',
-    post_linkedin:'professional LinkedIn post landscape',campana:'advertising campaign visual landscape',
-    otro_tipo:'marketing graphic'
-  };
-  const orientation = tipo==='historia'?'vertical portrait':'platType==="ig"?square composition":"wide landscape composition"';
-  return `Professional hotel marketing photography for ${pc.nm}, Puerto Varas, Chile, Patagonia region. ${typePrompts[tipo]||'marketing graphic'}. ${addInfo?'Context: '+addInfo+'.':''} ${randTitle?'Theme: '+randTitle+'.':''} Luxury hotel atmosphere, dramatic Patagonian landscape, Lake Llanquihue, Osorno volcano. Cinematic photography, moody natural lighting. No text, no logos, no words. Clean composition for text overlay.`;
+  const {pc,tipo,randTitle,addInfo} = formData;
+  return `Professional hotel marketing photography for ${pc.nm}, Puerto Varas Chile Patagonia. ${addInfo?'Context: '+addInfo+'.':''} ${randTitle?'Theme: '+randTitle+'.':''} Luxury atmosphere, Lake Llanquihue, Osorno volcano, dramatic landscape. Cinematic lighting. NO text, NO logos, NO words. Clean composition with space for text overlay.`;
 }
 
-// Call DALL-E 3 via Edge Function
-async function callDalleE(prompt, size, style='vivid'){
+async function callDalleE(prompt, size){
   let res;
   try {
     res = await fetch(EDGE_URL, {
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPA_KEY,'apikey':SUPA_KEY},
-      body: JSON.stringify({prompt, size, quality:'hd', style})
+      body: JSON.stringify({prompt, size, quality:'hd', style:'vivid'})
     });
-  } catch(netErr) {
-    throw new Error('Sin conexión con el servidor. Verifica tu internet. '+netErr.message);
-  }
-  let d;
-  try { d = await res.json(); } catch(e) { throw new Error('Respuesta inválida (status '+res.status+')'); }
+  } catch(e){ throw new Error('Sin conexión: '+e.message); }
+  const d = await res.json();
   if(d.error) throw new Error('DALL-E: '+d.error);
-  if(!d.image_b64) throw new Error('Sin imagen en respuesta. Verifica el API key de OpenAI en Supabase Secrets.');
+  if(!d.image_b64) throw new Error('Sin imagen. Verifica el API key de OpenAI en Supabase Secrets.');
   return 'data:image/png;base64,' + d.image_b64;
 }
 
 async function generateMockup(){
+  reharceCount++; // Each call (including Rehacer) gets a unique seed
+
   const prop=document.getElementById('f-property').value||'radisson_hotel';
   const tipo=document.getElementById('f-type').value||'post_feed';
   const titulo=document.getElementById('f-title').value||'Sin título';
@@ -1281,9 +1334,10 @@ async function generateMockup(){
   const ctaType=document.getElementById('f-cta-type').value;
   const ctaValue=document.getElementById('f-cta-value').value.trim();
   const ctaLabels={whatsapp:'💬 WhatsApp',web:'🌐 Página web',link:'🔗 Link',reservas:'🛎️ Reservas',email:'📧 Email',telefono:'📞 Teléfono',otro_cta:'📌 CTA'};
-  const ctaText=ctaType&&ctaValue?`CTA: ${ctaLabels[ctaType]||ctaType} → ${ctaValue}`:'';
+  const ctaText=ctaType&&ctaValue?`${ctaLabels[ctaType]||ctaType}: ${ctaValue}`:'';
   const randCopy=getRandCopy()||titulo;
   const randTitle=getRandTitle()||titulo;
+
   const platforms=Array.from(document.querySelectorAll('.plat-check input:checked')).map(c=>c.value);
   const hasMeta=platforms.includes('meta')||platforms.length===0;
   const hasLI=platforms.includes('linkedin');
@@ -1296,7 +1350,6 @@ async function generateMockup(){
   };
   const pc=propColors[prop]||propColors.radisson_hotel;
   const logoSrc=prop==='parkinn_hotel'||prop==='estacion_505'?LOGOS.parkinn:LOGOS.radisson_light;
-  const logosHtml=getLogosHtml(prop,false);
   const promoTxt=hasPromo&&precioAhora?`ANTES ${precioAntes} → AHORA ${precioAhora} (${tipoPrecio==='desde'?'Desde':'Precio fijo'}, ${iva==='mas_iva'?'+ IVA':'IVA incluido'})`:'';
   const formData={prop,pc,tipo,randTitle,randCopy,addInfo,hashtags,promoTxt,ctaText};
 
@@ -1315,41 +1368,68 @@ async function generateMockup(){
   mc.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:70px 40px;color:var(--w60);">
     <span class="spinner spinner-gold" style="width:36px;height:36px;border-width:3px;"></span>
     <div style="text-align:center;">
-      <div style="font-size:14px;font-weight:500;">${useUploaded?'Generando '+imgs.length+' propuestas con tus imágenes...':'Generando imágenes con DALL-E 3 HD...'}</div>
-      <div style="font-size:11px;margin-top:4px;opacity:.6;">Creando 4 propuestas con estilos distintos</div>
+      <div style="font-size:14px;font-weight:500;margin-bottom:6px;">${useUploaded
+        ?'🎨 GPT-4o está diseñando con tus '+imgs.length+' imagen(es)...'
+        :'🖼️ DALL-E 3 generando imágenes HD...'}</div>
+      <div style="font-size:11px;opacity:.6;">Creando 4 propuestas con estilos distintos${reharceCount>1?' · variación '+reharceCount:''}</div>
     </div>
   </div>`;
 
   try{
-    // ── GET BACKGROUND IMAGES ─────────────────────────────────────────
-    // Each slot gets: a bgImage + a style index (0-3) → 4 visually different proposals
-    let bgImages = []; // base64 data URLs, one per slot
+    let slotHtmls = []; // final graphic HTML for each slot
 
     if(useUploaded){
-      // Distribute uploaded images across 4 slots
-      slotDefs.forEach((_,i)=> bgImages.push(imgs[i % imgs.length]));
+      // ── COMPRESS images for API call ──────────────────────────────
+      const uniqueImgs = imgs.slice(0, 4);
+      const compressed = await Promise.all(uniqueImgs.map(img => compressImage(img, 600, 600, 0.78)));
+
+      // ── CALL GPT-4o Vision for each slot in PARALLEL ──────────────
+      const calls = slotDefs.map((sd, i) => {
+        const imgIdx = i % uniqueImgs.length;
+        return generateCreativeGraphic(
+          compressed[imgIdx],   // compressed for API
+          uniqueImgs[imgIdx],   // full res for display
+          formData,
+          i,                    // slot index → determines style
+          reharceCount          // variation seed
+        );
+      });
+      slotHtmls = await Promise.all(calls);
+
     } else {
-      // Generate DALL-E images: 1 per unique size needed
+      // ── DALL-E PATH: generate images then overlay ─────────────────
       const uniqueSizes=[...new Set(slotDefs.map(sd=>dalleSize(tipo,sd.type)))];
       const dallePrompt=buildDallePrompt(formData,'ig');
-      const dalleResults=await Promise.all(
-        uniqueSizes.map(size=>callDalleE(dallePrompt,size))
-      );
+      const dalleResults=await Promise.all(uniqueSizes.map(size=>callDalleE(dallePrompt,size)));
       const sizeMap={};
       uniqueSizes.forEach((s,i)=>sizeMap[s]=dalleResults[i]);
-      slotDefs.forEach(sd=>bgImages.push(sizeMap[dalleSize(tipo,sd.type)]||dalleResults[0]));
+
+      // Build overlay HTML for each slot (4 different styles)
+      slotDefs.forEach((sd,i)=>{
+        const bgUrl=sizeMap[dalleSize(tipo,sd.type)]||dalleResults[0];
+        const overlay=buildOverlay(formData,i);
+        const logoHtml=logoOverlayHtml(prop);
+        slotHtmls.push(`<div style="position:relative;width:100%;height:100%;overflow:hidden;">
+          <img src="${bgUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;" alt=""/>
+          ${overlay}
+          ${logoHtml}
+        </div>`);
+      });
     }
 
-    // ── BUILD 4 FRAMES ────────────────────────────────────────────────
+    // ── BUILD PLATFORM FRAMES ──────────────────────────────────────
     const labels={'ig':'📸 Instagram','fb':'📘 Facebook','li':'💼 LinkedIn'};
     const labelBgs={'ig':'#e1306c','fb':'#1877f2','li':'#0a66c2'};
     const ratioLabels={'ig':isStory?'9:16':'1:1','fb':'1.91:1','li':'1.91:1'};
-    const styleNames=['Gradiente base','Banda superior','Panel centrado','Franja lateral'];
 
     mc.innerHTML='';
     const disc=document.createElement('div');
     disc.style.cssText='background:var(--bg3);border-radius:6px;padding:10px 14px;margin-bottom:18px;font-size:12px;color:var(--w60);display:flex;align-items:center;gap:8px;';
-    disc.innerHTML=`<span>✨</span><span>${useUploaded?`${imgs.length} imagen(es) tuyas · 4 estilos diferentes`:'DALL-E 3 HD · 4 estilos diferentes'} · Copy: <strong style="color:var(--gold);">"${randTitle}"</strong></span>`;
+    disc.innerHTML=`<span>✨</span>
+      <span>${useUploaded
+        ?`GPT-4o diseñó con tus imágenes · 4 estilos diferentes`
+        :'DALL-E 3 HD · 4 estilos con overlay'
+      } · "<strong style="color:var(--gold);">${randTitle}</strong>"${reharceCount>1?` · variación ${reharceCount}`:''}</span>`;
     mc.appendChild(disc);
 
     const grid=document.createElement('div');
@@ -1358,25 +1438,17 @@ async function generateMockup(){
 
     slotDefs.forEach((sd,i)=>{
       const {type,ratio}=sd;
-      const bgUrl=bgImages[i];
-      const styleIdx=i; // Each slot uses a different overlay style (0,1,2,3)
-
-      // Build the graphic: image + overlay
-      const overlayHtml=buildOverlay(formData,logosHtml,styleIdx);
-      const graphicInner=`<div style="position:relative;width:100%;height:100%;overflow:hidden;">
-        <img src="${bgUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;" alt=""/>
-        ${overlayHtml}
-      </div>`;
-      const fullDoc=buildFullDoc(graphicInner);
+      const graphicHtml=slotHtmls[i];
+      const fullDoc=buildFullDoc(graphicHtml);
+      const imgLabel=useUploaded&&imgs.length>1?` · 📷${(i%imgs.length)+1}`:'';
 
       const cell=document.createElement('div');
-      const imgLabel=useUploaded?` · 📷${(i%imgs.length)+1}`:'';
       const badge=document.createElement('div');
       badge.style.cssText='margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;';
       badge.innerHTML=`
         <span style="background:${labelBgs[type]};border-radius:4px;padding:3px 8px;color:#fff;font-size:11px;font-weight:600;">${labels[type]}${imgLabel}</span>
         <span style="font-size:10px;color:var(--w30);background:var(--bg3);padding:2px 7px;border-radius:4px;">${ratioLabels[type]}</span>
-        <span style="font-size:10px;color:var(--w30);background:var(--bg3);padding:2px 7px;border-radius:4px;">Estilo ${styleIdx+1}: ${styleNames[styleIdx]}</span>`;
+        <span style="font-size:10px;color:var(--w30);background:var(--bg3);padding:2px 7px;border-radius:4px;">${CREATIVE_STYLES[i%4].name}</span>`;
 
       let frame;
       if(type==='ig') frame=makeIGFrame(fullDoc,pc.nm,logoSrc,ratio);
